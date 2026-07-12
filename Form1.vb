@@ -1,10 +1,12 @@
 Option Strict On
 Option Explicit On
 
+Imports System
 Imports System.Drawing
 Imports System.Drawing.Drawing2D
 Imports System.Windows.Forms
 Imports System.IO
+Imports System.Linq
 
 Public Class Form1
     Inherits Form
@@ -27,6 +29,11 @@ Public Class Form1
     Private localPlayerIndex As Integer = 0
     Private frameCounter As Integer = 0
 
+    ' Theo doi thoi diem vua cham dat (de hien khung "_land" trong vai tick) va
+    ' trang thai OnGround truoc do cua tung nguoi choi, dung phat hien thoi diem tiep dat.
+    Private landTimerP(1) As Integer
+    Private prevOnGroundP(1) As Boolean
+
     ' Phim Player 1 (dung cho Solo, Local2P-P1, va nguoi choi local trong che do mang)
     Private keyLeft As Boolean
     Private keyRight As Boolean
@@ -45,12 +52,23 @@ Public Class Form1
     Private keyShootP1 As Boolean
     Private keySwingP1 As Boolean
 
-    Private spPlayer0 As Bitmap
-    Private spPlayer0Walk2 As Bitmap
-    Private spPlayer0Jump As Bitmap
-    Private spPlayer1 As Bitmap
-    Private spPlayer1Walk2 As Bitmap
-    Private spPlayer1Jump As Bitmap
+    ' Sprite nhan vat: mang 2 chieu [skinIndex 0..3, poseIndex 0..7].
+    ' poseIndex: 0=idle 1=walk2 2=jump 3=swing 4=flip 5=land 6=wallcrouch 7=shootair
+    Private Const POSE_IDLE As Integer = 0
+    Private Const POSE_WALK2 As Integer = 1
+    Private Const POSE_JUMP As Integer = 2
+    Private Const POSE_SWING As Integer = 3
+    Private Const POSE_FLIP As Integer = 4
+    Private Const POSE_LAND As Integer = 5
+    Private Const POSE_WALLCROUCH As Integer = 6
+    Private Const POSE_SHOOTAIR As Integer = 7
+
+    Private ReadOnly skinPrefixes() As String = {"player0", "player1", "player2", "player3"}
+    Private ReadOnly poseSuffixes() As String = {"", "_walk2", "_jump", "_swing", "_flip", "_land", "_wallcrouch", "_shootair"}
+    Private ReadOnly skinNames() As String = {"Do - Den", "Xanh duong - Bac", "Luc - Vang", "Tim - Cam"}
+    Private ReadOnly skinFallbackColors() As Color = {Color.Red, Color.DeepSkyBlue, Color.LimeGreen, Color.Orange}
+    Private skinSprites(3, 7) As Bitmap
+
     Private spThug As Bitmap
     Private spThugWalk2 As Bitmap
     Private spSniperBase As Bitmap
@@ -59,6 +77,7 @@ Public Class Form1
     Private spBossWalk2 As Bitmap
     Private spGround As Bitmap
     Private spRoof As Bitmap
+    Private spPit As Bitmap
     Private spWeb As Bitmap
     Private spBulletEnemy As Bitmap
     Private spPowerWeb As Bitmap
@@ -73,6 +92,10 @@ Public Class Form1
     Private btnJoin As New Button()
     Private txtIp As New TextBox()
     Private pnlMenu As New Panel()
+    Private pnlSkin As New Panel()
+
+    ' Skin nguoi choi cuc bo hien tai da chon (dung de gui qua mang khi ket noi thanh cong)
+    Private myLocalSkin As Integer = 0
 
     Public Sub New()
         Me.Text = "Nguoi Giang To - Web-Slinger Co-op"
@@ -139,59 +162,114 @@ Public Class Form1
         Me.Controls.Add(pnlMenu)
     End Sub
 
-    Private Sub OnSoloClick(sender As Object, e As EventArgs)
-        currentMode = GameMode.Solo
-        isHost = True
-        isConnected = False
-        localPlayerIndex = 0
-        ResetKeys()
-        game.SetSoloMode(True)
+    ' Hien bang chon skin (4 lua chon) roi goi onChosen(skinIndex) khi nguoi choi bam vao 1 nut.
+    ' Dung chung cho ca 4 luong: Solo, Local2P (goi 2 lan lien tiep cho P1 roi P2), Host, Join.
+    Private Sub ShowSkinPicker(title As String, onChosen As Action(Of Integer))
         pnlMenu.Visible = False
-        TickTimer.Start()
+
+        pnlSkin.Controls.Clear()
+        pnlSkin.Size = New Size(320, 30 + WebSlingerGame.SKIN_COUNT * 44 + 10)
+        pnlSkin.Location = New Point((Me.ClientSize.Width - pnlSkin.Width) \ 2, (Me.ClientSize.Height - pnlSkin.Height) \ 2)
+        pnlSkin.BackColor = Color.FromArgb(230, 20, 20, 30)
+
+        Dim lblTitle As New Label()
+        lblTitle.Text = title
+        lblTitle.ForeColor = Color.White
+        lblTitle.AutoSize = True
+        lblTitle.Location = New Point(20, 4)
+        pnlSkin.Controls.Add(lblTitle)
+
+        For i As Integer = 0 To WebSlingerGame.SKIN_COUNT - 1
+            Dim btn As New Button()
+            btn.Text = skinNames(i)
+            btn.Size = New Size(280, 36)
+            btn.Location = New Point(20, 30 + i * 44)
+            Dim capturedIndex As Integer = i
+            AddHandler btn.Click, Sub(s2 As Object, e2 As EventArgs)
+                                       pnlSkin.Visible = False
+                                       onChosen(capturedIndex)
+                                   End Sub
+            pnlSkin.Controls.Add(btn)
+        Next
+
+        If Not Me.Controls.Contains(pnlSkin) Then Me.Controls.Add(pnlSkin)
+        pnlSkin.Visible = True
+        pnlSkin.BringToFront()
+    End Sub
+
+    Private Sub OnSoloClick(sender As Object, e As EventArgs)
+        ShowSkinPicker("Chon skin nhan vat", Sub(skin As Integer)
+                                                  currentMode = GameMode.Solo
+                                                  isHost = True
+                                                  isConnected = False
+                                                  localPlayerIndex = 0
+                                                  ResetKeys()
+                                                  game.SetSoloMode(True)
+                                                  game.SetSkin(0, skin)
+                                                  pnlMenu.Visible = False
+                                                  TickTimer.Start()
+                                              End Sub)
     End Sub
 
     Private Sub OnLocal2PClick(sender As Object, e As EventArgs)
-        currentMode = GameMode.Local2P
-        isHost = True
-        isConnected = False
-        localPlayerIndex = 0
-        ResetKeys()
-        game.SetSoloMode(False)
-        pnlMenu.Visible = False
-        TickTimer.Start()
+        ShowSkinPicker("Nguoi choi 1: chon skin", Sub(skinP0 As Integer)
+                                                       ShowSkinPicker("Nguoi choi 2: chon skin", Sub(skinP1 As Integer)
+                                                                                                     currentMode = GameMode.Local2P
+                                                                                                     isHost = True
+                                                                                                     isConnected = False
+                                                                                                     localPlayerIndex = 0
+                                                                                                     ResetKeys()
+                                                                                                     game.SetSoloMode(False)
+                                                                                                     game.SetSkin(0, skinP0)
+                                                                                                     game.SetSkin(1, skinP1)
+                                                                                                     pnlMenu.Visible = False
+                                                                                                     TickTimer.Start()
+                                                                                                 End Sub)
+                                                   End Sub)
     End Sub
 
     Private Sub OnHostClick(sender As Object, e As EventArgs)
-        currentMode = GameMode.NetworkHost
-        isHost = True
-        localPlayerIndex = 0
-        ResetKeys()
-        game.SetSoloMode(False)
-        net = New NetworkPeer(Me)
-        AddHandler net.LineReceived, AddressOf OnLineReceived
-        AddHandler net.Connected, AddressOf OnPeerConnected
-        AddHandler net.Disconnected, AddressOf OnPeerDisconnected
-        net.StartHost(9899)
-        lblStatus.Text = "Dang cho nguoi choi thu 2 ket noi... (port 9899)"
+        ShowSkinPicker("Chon skin nhan vat", Sub(skin As Integer)
+                                                  myLocalSkin = skin
+                                                  currentMode = GameMode.NetworkHost
+                                                  isHost = True
+                                                  localPlayerIndex = 0
+                                                  ResetKeys()
+                                                  game.SetSoloMode(False)
+                                                  game.SetSkin(0, skin)
+                                                  net = New NetworkPeer(Me)
+                                                  AddHandler net.LineReceived, AddressOf OnLineReceived
+                                                  AddHandler net.Connected, AddressOf OnPeerConnected
+                                                  AddHandler net.Disconnected, AddressOf OnPeerDisconnected
+                                                  net.StartHost(9899)
+                                                  pnlMenu.Visible = True
+                                                  lblStatus.Text = "Dang cho nguoi choi thu 2 ket noi... (port 9899)"
+                                              End Sub)
     End Sub
 
     Private Sub OnJoinClick(sender As Object, e As EventArgs)
-        currentMode = GameMode.NetworkClient
-        isHost = False
-        localPlayerIndex = 1
-        ResetKeys()
-        game.SetSoloMode(False)
-        net = New NetworkPeer(Me)
-        AddHandler net.LineReceived, AddressOf OnLineReceived
-        AddHandler net.Connected, AddressOf OnPeerConnected
-        AddHandler net.Disconnected, AddressOf OnPeerDisconnected
-        net.ConnectToHost(txtIp.Text.Trim(), 9899)
-        lblStatus.Text = "Dang ket noi den " & txtIp.Text.Trim() & " ..."
+        ShowSkinPicker("Chon skin nhan vat", Sub(skin As Integer)
+                                                  myLocalSkin = skin
+                                                  currentMode = GameMode.NetworkClient
+                                                  isHost = False
+                                                  localPlayerIndex = 1
+                                                  ResetKeys()
+                                                  game.SetSoloMode(False)
+                                                  game.SetSkin(1, skin)
+                                                  net = New NetworkPeer(Me)
+                                                  AddHandler net.LineReceived, AddressOf OnLineReceived
+                                                  AddHandler net.Connected, AddressOf OnPeerConnected
+                                                  AddHandler net.Disconnected, AddressOf OnPeerDisconnected
+                                                  net.ConnectToHost(txtIp.Text.Trim(), 9899)
+                                                  pnlMenu.Visible = True
+                                                  lblStatus.Text = "Dang ket noi den " & txtIp.Text.Trim() & " ..."
+                                              End Sub)
     End Sub
 
     Private Sub OnPeerConnected()
         isConnected = True
         pnlMenu.Visible = False
+        net.SendLine("SKIN|" & localPlayerIndex.ToString() & "|" & myLocalSkin.ToString())
         TickTimer.Start()
     End Sub
 
@@ -220,6 +298,18 @@ Public Class Form1
 
     ' ===================== NHAN DU LIEU MANG =====================
     Private Sub OnLineReceived(line As String)
+        If line.StartsWith("SKIN|") Then
+            Dim parts As String() = line.Split("|"c)
+            If parts.Length >= 3 Then
+                Dim idx As Integer
+                Dim skin As Integer
+                If Integer.TryParse(parts(1), idx) AndAlso Integer.TryParse(parts(2), skin) Then
+                    game.SetSkin(idx, skin)
+                End If
+            End If
+            Return
+        End If
+
         If currentMode = GameMode.NetworkHost Then
             If line.StartsWith("INPUT|") Then
                 Dim inp As WebSlingerGame.PlayerInput = WebSlingerGame.ParseInput(line)
@@ -275,6 +365,18 @@ Public Class Form1
                     net.SendLine(WebSlingerGame.SerializeInput(inpP1))
                 End If
         End Select
+
+        ' Phat hien thoi diem vua tiep dat (OnGround chuyen tu False -> True) de
+        ' kich hoat hien khung "_land" trong vai tick, khong phu thuoc che do choi.
+        For i As Integer = 0 To 1
+            Dim p As WebSlingerGame.PlayerState = game.Players(i)
+            If p.OnGround AndAlso Not prevOnGroundP(i) Then
+                landTimerP(i) = 8
+            ElseIf landTimerP(i) > 0 Then
+                landTimerP(i) -= 1
+            End If
+            prevOnGroundP(i) = p.OnGround
+        Next
 
         Me.Invalidate()
     End Sub
@@ -339,6 +441,7 @@ Public Class Form1
         g.Clear(Color.FromArgb(30, 40, 70))
 
         DrawBackground(g)
+        DrawPits(g)
         DrawPlatforms(g)
         DrawPowerUps(g)
         DrawEnemies(g)
@@ -372,6 +475,50 @@ Public Class Form1
         Else
             Using skyBrush As New SolidBrush(Color.FromArgb(20, 24, 40))
                 g.FillRectangle(skyBrush, 0, 0, WebSlingerGame.VIEW_WIDTH_PX, WebSlingerGame.VIEW_HEIGHT_PX)
+            End Using
+        End If
+    End Sub
+
+    ' Tim khoang trong giua cac doan duong (Ground) lien tiep va ve tile vuc lap day,
+    ' keo dai tu mat duong xuong het day man hinh. Chi la hieu ung hinh anh - viec
+    ' roi xuong vuc da bi tinh la "mat mang" san trong ResolvePlatformCollision.
+    Private Sub DrawPits(g As Graphics)
+        Dim grounds = game.Platforms.
+            Where(Function(p) p.Kind = WebSlingerGame.PlatformKind.Ground).
+            OrderBy(Function(p) p.X).ToList()
+
+        For i As Integer = 0 To grounds.Count - 2
+            Dim gapStart As Double = grounds(i).X + grounds(i).W
+            Dim gapEnd As Double = grounds(i + 1).X
+            If gapEnd > gapStart Then
+                DrawPitSegment(g, gapStart, gapEnd)
+            End If
+        Next
+    End Sub
+
+    Private Sub DrawPitSegment(g As Graphics, worldStart As Double, worldEnd As Double)
+        Dim sx As Integer = WorldToScreenX(worldStart)
+        Dim ex As Integer = WorldToScreenX(worldEnd)
+        If ex < 0 OrElse sx > WebSlingerGame.VIEW_WIDTH_PX Then Return
+
+        Dim topY As Integer = WebSlingerGame.GROUND_Y
+        Dim bottomY As Integer = WebSlingerGame.VIEW_HEIGHT_PX
+
+        If spPit IsNot Nothing Then
+            Dim tileW As Integer = spPit.Width
+            Dim tileH As Integer = spPit.Height
+            Dim tx As Integer = sx
+            Do While tx < ex
+                Dim ty As Integer = topY
+                Do While ty < bottomY
+                    g.DrawImage(spPit, tx, ty, tileW, tileH)
+                    ty += tileH
+                Loop
+                tx += tileW
+            Loop
+        Else
+            Using b As New SolidBrush(Color.Black)
+                g.FillRectangle(b, sx, topY, ex - sx, bottomY - topY)
             End Using
         End If
     End Sub
@@ -427,13 +574,34 @@ Public Class Form1
             Dim blink As Boolean = (p.InvulnTicks > 0) AndAlso ((p.InvulnTicks \ 4) Mod 2 = 0)
             If blink Then Continue For
 
-            Dim baseSprite As Bitmap = If(i = 0, spPlayer0, spPlayer1)
-            Dim walk2Sprite As Bitmap = If(i = 0, spPlayer0Walk2, spPlayer1Walk2)
-            Dim jumpSprite As Bitmap = If(i = 0, spPlayer0Jump, spPlayer1Jump)
+            Dim skin As Integer = Math.Max(0, Math.Min(3, p.SkinIndex))
+            Dim baseSprite As Bitmap = skinSprites(skin, POSE_IDLE)
+            Dim walk2Sprite As Bitmap = skinSprites(skin, POSE_WALK2)
+            Dim jumpSprite As Bitmap = skinSprites(skin, POSE_JUMP)
+            Dim swingSprite As Bitmap = skinSprites(skin, POSE_SWING)
+            Dim flipSprite As Bitmap = skinSprites(skin, POSE_FLIP)
+            Dim landSprite As Bitmap = skinSprites(skin, POSE_LAND)
+            Dim wallcrouchSprite As Bitmap = skinSprites(skin, POSE_WALLCROUCH)
+            Dim shootAirSprite As Bitmap = skinSprites(skin, POSE_SHOOTAIR)
+
+            ' "Vua ban" = ShootCooldown vua duoc dat lai ve gia tri toi da cua cap do hien tai
+            Dim justFired As Boolean = (p.ShootCooldown = game.CooldownForLevel(p.WebLevel)) AndAlso p.ShootCooldown > 0
 
             Dim sprite As Bitmap
-            If (Not p.OnGround OrElse p.IsSwinging) AndAlso jumpSprite IsNot Nothing Then
+            If p.IsSwinging AndAlso swingSprite IsNot Nothing Then
+                sprite = swingSprite
+            ElseIf Not p.OnGround AndAlso justFired AndAlso shootAirSprite IsNot Nothing Then
+                sprite = shootAirSprite
+            ElseIf Not p.OnGround AndAlso p.VelY < 0 AndAlso jumpSprite IsNot Nothing Then
                 sprite = jumpSprite
+            ElseIf Not p.OnGround AndAlso p.VelY >= 0 AndAlso flipSprite IsNot Nothing Then
+                sprite = flipSprite
+            ElseIf Not p.OnGround AndAlso jumpSprite IsNot Nothing Then
+                sprite = jumpSprite
+            ElseIf p.OnGround AndAlso landTimerP(i) > 0 AndAlso landSprite IsNot Nothing Then
+                sprite = landSprite
+            ElseIf p.OnGround AndAlso p.AimDy = 1 AndAlso Not p.IsMoving AndAlso wallcrouchSprite IsNot Nothing Then
+                sprite = wallcrouchSprite
             ElseIf p.IsMoving AndAlso p.OnGround AndAlso walk2Sprite IsNot Nothing AndAlso ((frameCounter \ 6) Mod 2 = 1) Then
                 sprite = walk2Sprite
             Else
@@ -451,7 +619,7 @@ Public Class Form1
                 End If
                 g.Restore(st)
             Else
-                Dim c As Color = If(i = 0, Color.Red, Color.DeepSkyBlue)
+                Dim c As Color = skinFallbackColors(skin)
                 Using b As New SolidBrush(c)
                     g.FillRectangle(b, sx, sy, WebSlingerGame.PLAYER_W, WebSlingerGame.PLAYER_H)
                 End Using
@@ -606,12 +774,11 @@ Public Class Form1
         Dim dir As String = AppDomain.CurrentDomain.BaseDirectory
         Dim assetsDir As String = Path.Combine(dir, "Assets")
 
-        spPlayer0 = TryLoad(assetsDir, "player0.png")
-        spPlayer0Walk2 = TryLoad(assetsDir, "player0_walk2.png")
-        spPlayer0Jump = TryLoad(assetsDir, "player0_jump.png")
-        spPlayer1 = TryLoad(assetsDir, "player1.png")
-        spPlayer1Walk2 = TryLoad(assetsDir, "player1_walk2.png")
-        spPlayer1Jump = TryLoad(assetsDir, "player1_jump.png")
+        For s As Integer = 0 To 3
+            For pIdx As Integer = 0 To 7
+                skinSprites(s, pIdx) = TryLoad(assetsDir, skinPrefixes(s) & poseSuffixes(pIdx) & ".png")
+            Next
+        Next
         spThug = TryLoad(assetsDir, "enemy_thug.png")
         spThugWalk2 = TryLoad(assetsDir, "enemy_thug_walk2.png")
         spSniperBase = TryLoad(assetsDir, "enemy_sniper_base.png")
@@ -620,6 +787,7 @@ Public Class Form1
         spBossWalk2 = TryLoad(assetsDir, "enemy_boss_walk2.png")
         spGround = TryLoad(assetsDir, "tile_ground.png")
         spRoof = TryLoad(assetsDir, "tile_roof.png")
+        spPit = TryLoad(assetsDir, "tile_pit.png")
         spWeb = TryLoad(assetsDir, "web_shot.png")
         spBulletEnemy = TryLoad(assetsDir, "bullet_enemy.png")
         spPowerWeb = TryLoad(assetsDir, "powerup_web.png")

@@ -49,6 +49,7 @@ Public Class WebSlingerGame
 
     Public Const RESPAWN_INVULN_TICKS As Integer = 90
     Public Const SHARED_LIVES_START As Integer = 5
+    Public Const SKIN_COUNT As Integer = 4
 
     Public Const ENEMY_MAX_ALIVE As Integer = 5
     Public Const ENEMY_SPAWN_CHECK_TICKS As Integer = 10
@@ -93,6 +94,7 @@ Public Class WebSlingerGame
         Public SwingLength As Double
         Public SwingAngle As Double         ' radian, 0 = treo thang xuong duoi diem neo
         Public SwingAngularVel As Double
+        Public SkinIndex As Integer     ' 0-3, chon nhan vat/skin nao de ve (doc lap voi index P1/P2)
     End Structure
 
     Public Structure BulletState
@@ -184,6 +186,18 @@ Public Class WebSlingerGame
         BuildLevel1()
         Players(0) = MakeFreshPlayer(120, GROUND_Y - PLAYER_H)
         Players(1) = MakeFreshPlayer(60, GROUND_Y - PLAYER_H)
+        Dim p0 As PlayerState = Players(0) : p0.SkinIndex = 0 : Players(0) = p0
+        Dim p1 As PlayerState = Players(1) : p1.SkinIndex = 1 : Players(1) = p1
+    End Sub
+
+    ' Chon skin/nhan vat cho mot slot nguoi choi (0 hoac 1). Duoc goi tu menu chon
+    ' skin truoc khi vao tran, va cung duoc dong bo qua mang bang message "SKIN|idx|skin".
+    Public Sub SetSkin(idx As Integer, skinIndex As Integer)
+        If idx < 0 OrElse idx > 1 Then Return
+        Dim clamped As Integer = Math.Max(0, Math.Min(SKIN_COUNT - 1, skinIndex))
+        Dim p As PlayerState = Players(idx)
+        p.SkinIndex = clamped
+        Players(idx) = p
     End Sub
 
     Public Sub SetSoloMode(solo As Boolean)
@@ -492,7 +506,9 @@ Public Class WebSlingerGame
         p.SwingAngularVel = 0
     End Sub
 
-    Private Function CooldownForLevel(level As Integer) As Integer
+    ' Public de Form1.vb co the doc gia tri cooldown toi da, dung phat hien "vua ban"
+    ' (de chon khung hinh "ban giua khong" khi ShootCooldown moi duoc dat lai ve max).
+    Public Function CooldownForLevel(level As Integer) As Integer
         Select Case level
             Case 1 : Return RAPID_COOLDOWN
             Case 2 : Return SPREAD_COOLDOWN
@@ -837,7 +853,7 @@ Public Class WebSlingerGame
     End Function
 
     Private Function SerializePlayer(p As PlayerState) As String
-        Return String.Format("{0:F1},{1:F1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11}",
+        Return String.Format("{0:F1},{1:F1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12}",
             p.X, p.Y,
             If(p.FacingRight, 1, 0),
             p.AimDx, p.AimDy,
@@ -847,7 +863,8 @@ Public Class WebSlingerGame
             p.InvulnTicks,
             p.RespawnTimer,
             If(p.IsMoving, 1, 0),
-            If(p.IsSwinging, 1, 0))
+            If(p.IsSwinging, 1, 0),
+            p.SkinIndex)
     End Function
 
     Public Sub ApplyStateLine(line As String)
@@ -907,6 +924,7 @@ Public Class WebSlingerGame
         p.RespawnTimer = Integer.Parse(f(9))
         p.IsMoving = If(f.Length > 10, f(10) = "1", False)
         p.IsSwinging = If(f.Length > 11, f(11) = "1", False)
+        p.SkinIndex = If(f.Length > 12, Integer.Parse(f(12)), 0)
         Return p
     End Function
 

@@ -1,81 +1,102 @@
-# Nguoi Giang To - Web-Slinger Co-op Online
+# Người Giăng Tơ - Web-Slinger Co-op Online
 
-Game ban sung + du day to cuon ngang, chuyen the tu bo khung `GamePvP-Contra`
-(tai su dung nguyen ven tang mang P2P trong `NetworkPeer.vb`, giao thuc
-STATE/INPUT pipe-delimited, host authoritative). Nhan vat, quai va boi canh la
-**thiet ke goc**, khong dung ten/hinh anh nhan vat thuong hieu cua ben thu ba -
-chi lay cam hung tu lo choi "du day to giua cac toa nha" theo phong cach cac
-game sieu anh hung nhen kinh dien.
+Game bắn súng + đu dây tơ cuộn ngang, chuyển thể từ bộ khung `GamePvP-Contra`
+(tái sử dụng nguyên vẹn tầng mạng P2P trong `NetworkPeer.vb`, giao thức
+STATE/INPUT pipe-delimited, host authoritative). Nhân vật, quái và bối cảnh là
+**thiết kế gốc**, không dùng tên/hình ảnh nhân vật thương hiệu của bên thứ ba -
+chỉ lấy cảm hứng từ lối chơi "đu dây tơ giữa các tòa nhà" theo phong cách các
+game siêu anh hùng nhện kinh điển.
 
-## Diem moi so voi ban Contra: co che DU DAY TO
+## Điểm mới so với bản Contra: cơ chế ĐU DÂY TƠ
 
-- Nhay len khong trung (roi tu mai nha, hoac sau khi nhay thuong) roi **giu phim
-  du day to** (Shift/Q/. tuy che do) se tu dong bam vao **diem neo** gan nhat
-  phia tren (cham trang nho tren noc nha).
-- Trong luc du, nhan Trai/Phai de "nhoi da" (pump) tang bien do lac, giong dong
-  tac lay da trong cac game du day kinh dien.
-- Nha phim du day de tha ra bay theo quan tinh; nhan them phim Nhay dung luc
-  nha day se duoc "bat" len cao hon mot chut (giong cu nhay-bat quen thuoc).
-- Ha canh xuong noc nha/via he se tu dong ngat day.
+- Nhảy lên không trung (rơi từ mái nhà, hoặc sau khi nhảy thường) rồi **giữ phím
+  đu dây tơ** (Shift/Q/. tùy chế độ) sẽ tự động bám vào **điểm neo** gần nhất
+  phía trên (chấm trắng nhỏ trên nóc nhà).
+- Trong lúc đu, nhấn Trái/Phải để "nhồi đà" (pump) tăng biên độ lắc, giống động
+  tác lấy đà trong các game đu dây kinh điển.
+- Nhả phím đu dây để thả ra bay theo quán tính; nhấn thêm phím Nhảy đúng lúc
+  nhả dây sẽ được "bật" lên cao hơn một chút (giống cú nhảy-bật quen thuộc).
+- Hạ cánh xuống nóc nhà/vỉa hè sẽ tự động ngắt dây.
 
-## Cach choi
+## Chọn skin nhân vật (mới)
 
-- Do phan giai man hinh: **960x540** (chuan 16:9)
-- Man hinh mo dau: **Choi 1 nguoi (Solo)**, **Host**, **Join** - giong het quy
-  uoc cac ban truoc.
-- **Di chuyen**: mui ten Trai/Phai hoac A/D
-- **Ngam 8 huong**: giu Len/Xuong ket hop Trai/Phai (doc lap voi huong di chuyen)
-- **Nhay**: Space hoac Z
-- **Ban to**: Ctrl hoac X
-- **Du day to** (chi khi dang o tren khong): giu Shift hoac C
+Trước khi vào trận, mỗi người chơi được chọn 1 trong 4 skin:
 
-## He thong sung to (WebLevel)
+| Skin | Mô tả | File prefix |
+|---|---|---|
+| 0 | Đỏ - Đen (giáp công nghệ) | `player0_*.png` |
+| 1 | Skin gốc thứ hai của game | `player1_*.png` |
+| 2 | Đỏ - Xanh dương (kiểu người nhện cổ điển) | `player2_*.png` |
+| 3 | Xanh dương - Đen | `player3_*.png` |
 
-- **Lv0**: ban thuong, toc do vua
-- **Lv1** (nhat binh dich to): ban nhanh hon
-- **Lv2** (nhat them 1 binh): ban toe 3 tia cung luc
+- **Solo**: chọn 1 lần cho nhân vật của bạn
+- **2 người cùng máy**: chọn lần lượt cho Người chơi 1 rồi Người chơi 2 (có thể trùng skin nhau)
+- **Host/Join qua mạng**: mỗi bên tự chọn skin của mình, được đồng bộ qua đối phương bằng message mạng `SKIN|playerIndex|skinIndex` ngay khi kết nối thành công
+- Skin được lưu trong `PlayerState.SkinIndex`, đồng bộ qua giao thức STATE (host gửi) nên luôn khớp giữa 2 máy
 
-Nhat binh dich to hoac +1 mang roi ran rac tren duong, tuong tu he thong
-powerup cua ban Contra.
+Mỗi skin cần đủ 8 file sprite (`_walk2`, `_jump`, `_swing`, `_flip`, `_land`, `_wallcrouch`, `_shootair` + file idle gốc), thiếu file nào thì tự động dùng màu khối fallback riêng cho skin đó (đỏ, xanh dương, lục, cam).
 
-## Quai vat
+> **Lưu ý kỹ thuật khi ghép skin mới**: engine luôn vẽ sprite bằng cách kéo giãn (stretch) vào khung cố định `PLAYER_W x PLAYER_H` (34x46, tỉ lệ dọc ~0.70-0.74), bất kể kích thước ảnh gốc. Nếu ảnh nguồn có tỉ lệ khác biệt lớn (đặc biệt ảnh nằm ngang) so với các pose còn lại của cùng skin, nhân vật sẽ bị méo/dẹp rõ rệt khi hiển thị. File `player2_shootair.png` (tư thế bắn tơ trên không của skin 2) ban đầu là ảnh nằm ngang (677x369, tỉ lệ 1.83) trong khi các pose khác của skin này là ảnh dọc (tỉ lệ ~0.70) - đã được đệm (pad) thêm nền trong suốt trên/dưới để đưa về đúng tỉ lệ dọc 0.70, giữ nguyên hình nhân vật không bị bóp méo.
 
-- **Con do duong pho (Thug)**: di tuan tren via he, ban ngang ve phia nguoi choi
-- **Xa thu noc nha (Sniper)**: dung yen tren mai nha, xoay ngam theo huong
-  nguoi choi gan nhat (dung nguyen kien truc turret cua ban Contra)
-- **Trum bang dang cuoi man (Boss)**: nhieu mau, ha guc la thang man
+## Cách chơi
 
-## Kien truc ky thuat
+- Độ phân giải màn hình: **960x540** (chuẩn 16:9)
+- Màn hình mở đầu: **Chơi 1 người (Solo)**, **Host**, **Join** - giống hệt quy
+  ước các bản trước.
+- **Di chuyển**: mũi tên Trái/Phải hoặc A/D
+- **Ngắm 8 hướng**: giữ Lên/Xuống kết hợp Trái/Phải (độc lập với hướng di chuyển)
+- **Nhảy**: Space hoặc Z
+- **Bắn tơ**: Ctrl hoặc X
+- **Đu dây tơ** (chỉ khi đang ở trên không): giữ Shift hoặc C
 
-- **WebSlingerGame.vb**: toan bo logic gameplay - vat ly nhay/roi thong thuong,
-  vat ly du day to (con lac don gian: gia toc goc = -(g/L)*sin(goc), co nhoi da
-  va giam chan), va cham platform 1 chieu (noc nha), AI quai, ban to, powerup,
-  serialize/deserialize giao thuc mang. Host chay `Tick()` moi 33ms.
-- **Form1.vb**: UI Host/Join, doc phim, ve GDI+ (uu tien sprite trong `Assets/`
-  neu co, tu dong fallback hinh khoi mau khi thieu file), ve duong day to noi
-  nguoi choi voi diem neo dang bam.
-- **NetworkPeer.vb**: khong doi so voi cac ban truoc, TCP P2P thuan tuy.
-- **Diem neo (`Anchors`)**: danh sach toa do tinh, dat cao hon noc nha mot chut
-  doc theo man choi, dung de tim diem bam day to gan nhat khi nguoi choi giu
-  phim du day tren khong.
+## Hệ thống súng tơ (WebLevel)
+
+- **Lv0**: bắn thường, tốc độ vừa
+- **Lv1** (nhặt bình dịch tơ): bắn nhanh hơn
+- **Lv2** (nhặt thêm 1 bình): bắn tỏe 3 tia cùng lúc
+
+Nhặt bình dịch tơ hoặc +1 mạng rơi rải rác trên đường, tương tự hệ thống
+powerup của bản Contra.
+
+## Quái vật
+
+- **Côn đồ đường phố (Thug)**: đi tuần trên vỉa hè, bắn ngang về phía người chơi
+- **Xạ thủ nóc nhà (Sniper)**: đứng yên trên mái nhà, xoay ngắm theo hướng
+  người chơi gần nhất (dùng nguyên kiến trúc turret của bản Contra)
+- **Trùm băng đảng cuối màn (Boss)**: nhiều máu, hạ gục là thắng màn
+
+## Kiến trúc kỹ thuật
+
+- **WebSlingerGame.vb**: toàn bộ logic gameplay - vật lý nhảy/rơi thông thường,
+  vật lý đu dây tơ (con lắc đơn giản: gia tốc góc = -(g/L)*sin(góc), có nhồi đà
+  và giảm chấn), va chạm platform 1 chiều (nóc nhà), AI quái, bắn tơ, powerup,
+  serialize/deserialize giao thức mạng. Host chạy `Tick()` mỗi 33ms.
+- **Form1.vb**: UI Host/Join, đọc phím, vẽ GDI+ (ưu tiên sprite trong `Assets/`
+  nếu có, tự động fallback hình khối màu khi thiếu file), vẽ đường dây tơ nối
+  người chơi với điểm neo đang bám.
+- **NetworkPeer.vb**: không đổi so với các bản trước, TCP P2P thuần túy.
+- **Điểm neo (`Anchors`)**: danh sách tọa độ tĩnh, đặt cao hơn nóc nhà một chút
+  dọc theo màn chơi, dùng để tìm điểm bám dây tơ gần nhất khi người chơi giữ
+  phím đu dây trên không.
 
 ## Build
 
-Chay `build_webslinger.bat` (dung `vbc.exe` cua .NET Framework 4.x co san
-trong Windows, khong can Visual Studio). Sau khi build xong, dat thu muc
-`Assets/` cung cho voi file .exe.
+Chạy `build_webslinger.bat` (dùng `vbc.exe` của .NET Framework 4.x có sẵn
+trong Windows, không cần Visual Studio). Sau khi build xong, đặt thư mục
+`Assets/` cùng chỗ với file .exe.
 
 ## Assets
 
-Chua kem sprite rieng cho game nay. Ban co the tai su dung/chinh sua file PNG
-tu cac ban Mario/Contra da co (doi ten thanh player0.png, player1.png,
-tile_ground.png, background.png...) hoac tu ve moi theo danh sach ten file
-trong `LoadSpritesIfExist()` o Form1.vb. Neu thieu file, game van chay binh
-thuong va tu dong ve hinh khoi mau GDI+ thay the.
+Đã có đủ 4 bộ skin nhân vật (`player0` đến `player3`), mỗi bộ 8 file sprite
+theo danh sách tên file trong `LoadSpritesIfExist()` ở Form1.vb. Nếu thiếu
+file, game vẫn chạy bình thường và tự động vẽ hình khối màu GDI+ thay thế.
+Khi ghép thêm skin mới, nên kiểm tra kích thước/tỉ lệ ảnh khớp với các pose
+còn lại của cùng skin để tránh bị kéo méo khi hiển thị (xem lưu ý ở mục
+"Chọn skin nhân vật" phía trên).
 
-## Ghi chu ban quyen
+## Ghi chú bản quyền
 
-Day la thiet ke goc lay cam hung tu co che "du day to giua nha cao tang" noi
-tieng trong dong game sieu anh hung nhen - khong su dung ten rieng, logo,
-hoac hinh anh nhan vat cua bat ky thuong hieu nao. Ban co toan quyen doi ten,
-mau sac, tao hinh nhan vat theo y thich khi lam sprite rieng.
+Đây là thiết kế gốc lấy cảm hứng từ cơ chế "đu dây tơ giữa nhà cao tầng" nổi
+tiếng trong dòng game siêu anh hùng nhện - không sử dụng tên riêng, logo,
+hoặc hình ảnh nhân vật của bất kỳ thương hiệu nào. Bạn có toàn quyền đổi tên,
+màu sắc, tạo hình nhân vật theo ý thích khi làm sprite riêng.
