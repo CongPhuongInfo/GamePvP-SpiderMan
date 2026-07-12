@@ -1,5 +1,9 @@
 # Người Giăng Tơ - Web-Slinger Co-op Online
 
+<p align="center">
+  <img src="GameSpiderMan-logo.png" width="800">
+</p>
+
 Game bắn súng + đu dây tơ cuộn ngang, chuyển thể từ bộ khung `GamePvP-Contra`
 (tái sử dụng nguyên vẹn tầng mạng P2P trong `NetworkPeer.vb`, giao thức
 STATE/INPUT pipe-delimited, host authoritative). Nhân vật, quái và bối cảnh là
